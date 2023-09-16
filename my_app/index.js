@@ -1,35 +1,81 @@
-import express from "express";
-import path from 'path'; //__dirname 사용하기 위해 import
+import express, { json } from 'express';
+import path from 'path';
 import nunjucks from 'nunjucks';
+import bodyParser from 'body-parser';
+import fs from 'fs';
 
-const __dirname = path.resolve(); //또한 이런식으로 이름을 정확히 명시해줘야 오류가 나지 않고 사용할 수 있음
+const __dirname = path.resolve();
 
 const app = express();
 
-//템플릿 엔진에서 편리하게 사용하기 위해 뷰엔진이라는 값을 설정
+// file path
+// my_app/data/writing.json
+const filePath = path.join(__dirname, 'data', 'writing.json');
+
+// body parser set
+app.use(bodyParser.urlencoded({ extended: false })); // express 기본 모듈 사용
+app.use(bodyParser.json());
+
 // view engine set
-app.set('view engine', 'html'); // main -> main.html main만 써도 뒤에 html이 자동으로 붙음
+app.set('view engine', 'html'); // main.html -> main(.html)
 
 // nunjuecks 자체에 대한 세팅
 nunjucks.configure('views', { //첫번째는 템플릿엔진 사용할 때 어떤 위치에서 
-                              //그 파일을 찾을건지 경로를 입력. views폴더 안에는 템플릿 엔진으로 해석될 
-                              //템플릿을 넣어줌
+  //그 파일을 찾을건지 경로를 입력. views폴더 안에는 템플릿 엔진으로 해석될 
+  //템플릿을 넣어줌
   watch: true, // html 파일이 수정될 경우, 다시 반영 후 렌더링
   express: app //express 자체가 어떤 객체를 나타내는 지 const app = express();
 })
 
-
-// moddleware - 서버에서 동작하는 여러가지 동작을 여기에 적으면 됨.
+// middleware
 // main page GET
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/main.html'); // sendFile안에는 어떤 경로의 파일을 보낼건지 위치를 나타냄
+app.get('/',  (req, res) => {
+  const fileData = fs.readFileSync(filePath);
+  const wirtings = JSON.parse(fileData);
+
+
+  res.render('main', {list: wirtings});
 });
 
 app.get('/write', (req, res) => {
-  res.render('write.html')
-  // render는 서버에서 렌더링을 해준다는 것을 의미, ()안에는 내가 사용할 파일의 경로를 입력. 위에서 views라고 해줬기 때문에 그냥 파일명만 쓰면 됨
+    res.render('write');
+});
+
+app.post('/write', (req, res) => {
+  //request 안에 있는 내용을 처리
+  //request.body  
+  const title = req.body.title;
+  const contents = req.body.contents;
+  const date = req.body.date;
+
+  // 단순히 값만 넘길 때는 값이 저장되는 게 아니기 때문에 wirte 함수 앞에서 렌더를 해주기 전에
+  // 값을 저장하는 것을 추가해줘야함.
+
+  // 데이터 저장
+  // data/wirting.json 안에 글 내용 저장
+  const fileData = fs.readFileSync(filePath); // 파일 읽기
+                                              // sync는 node.js가 비동기이기때문에 
+                                              // 이 값들을 읽어오는 작업 다음에 다음 동작이 실행되게끔 readFileSync 사용
+
+  const writings = JSON.parse(fileData); // 파일 변환
+  
+  // request 데이터를 저장
+  writings.push({ // 글 하나당 하나의 객체로
+    'title': title,
+    'contents': contents,
+    'date': date
+  })
+
+  //data/writing.json에 저장
+  fs.writeFileSync(filePath, JSON.stringify(writings)) // 다시 버퍼형태로 저장해야 하기 때문에
+
+  res.render('detail', { 'detail': { title: title, contents: contents, date: date } });
+});
+
+app.get('/detail', async (req, res) => {
+    res.render('detail');
 })
 
 app.listen(3000, () => {
-  console.log('Server is running');
+    console.log('Server is running');
 });
